@@ -1,79 +1,79 @@
 import { useState } from "react";
 import "../styles/registerStyles.css";
-import { User } from "../utils/types";
-import { handleOverflowHeight } from "../utils/handleOverflowHeight";
 import { convertHeight, convertWeight } from "../utils/unitConversions";
-import ReactInputMask from "react-input-mask";
+import { InputMask } from "@react-input/mask";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { FieldValues, Path, useForm } from "react-hook-form";
+import { userSchema, UserSchemaType } from "../utils/schema/userSchema";
 
 const RegisterPage = () => {
-  // State to store the user's information
-  const [user, setUser] = useState<User>({
-    name: {
-      firstName: "",
-      lastName: "",
+  const {
+    register,
+    handleSubmit,
+    watch,
+    setValue,
+    formState: { errors },
+  } = useForm({
+    resolver: zodResolver(userSchema),
+    defaultValues: {
+      name: {
+        firstName: "",
+        lastName: "",
+      },
+      dob: "",
+      gender: "male",
+      height: "0",
+      weight: 0,
     },
-    dob: "",
-    gender: "male",
-    height: "",
-    weight: "",
-    exerciseLevel: "",
   });
 
   // Check units of height and weight
   const [isMetricWeight, setIsMetricWeight] = useState(true);
   const [isMetricHeight, setIsMetricHeight] = useState(true);
 
+  const handleOnBlur = (e: React.FocusEvent<HTMLInputElement, Element>) => {
+    const { name, value } = e.target;
+
+    setValue(name as Path<UserSchemaType>, value);
+  };
+
   const toggleHeightUnit = () => {
+    const currentHeight = watch("height"); // Get the current height value
+
+    // Determine the new format
+    const newFormattedHeight = isMetricHeight
+      ? convertHeight(currentHeight, true) // Metric to Imperial
+      : Math.round(convertHeight(currentHeight, false) as number); // Imperial to Metric
+
+    // Toggle the height unit
     setIsMetricHeight(!isMetricHeight);
-    setUser({ ...user, height: convertHeight(user.height, isMetricHeight) });
+
+    setValue("height", newFormattedHeight.toString());
   };
 
   const toggleWeightUnit = () => {
+    setValue("weight", convertWeight(watch("weight"), isMetricWeight));
     setIsMetricWeight(!isMetricWeight);
-    setUser({
-      ...user,
-      weight: convertWeight(user.weight, isMetricWeight),
-    });
   };
 
-  const handleOnChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
+  const onSubmit = (data: FieldValues) => {
+    console.log("Form Submitted", data);
 
-    if (name.includes(".")) {
-      const [parent, child] = name.split(".");
+    const newUser = {
+      ...data,
+      height: /^\d'\d{2}"$/.test(data.height)
+        ? convertHeight(data.height, false)
+        : parseFloat(data.height),
+      weight: isMetricWeight ? data.weight : convertWeight(data.weight, false),
+    };
 
-      setUser({
-        ...user,
-        [parent]: {
-          ...(user[parent as keyof User] as Record<string, string>),
-          [child]: value,
-        },
-      });
-    } else {
-      setUser({ ...user, [name]: value });
-      if (name === "height" && !isMetricHeight) {
-        // Validate and reformat after user finishes typing
-        if (/^\d+'?\d*"?$/.test(value)) {
-          const [feet, inches] = handleOverflowHeight(value);
-
-          // Prevent overflows
-          if (feet > 9) {
-            setUser({ ...user, [name]: "9'11\"" });
-          } else {
-            setUser({
-              ...user,
-              [name]: `${feet}'${inches < 10 ? `0${inches}` : inches}"`,
-            });
-          }
-        }
-      }
-    }
+    console.log("Adjusted", newUser);
   };
 
   return (
     <div className="px-2">
       <h1>Registration</h1>
-      <form>
+      <form onSubmit={handleSubmit(onSubmit)}>
         {/* Names*/}
         <fieldset className="input-row">
           <div className="text-input">
@@ -81,20 +81,24 @@ const RegisterPage = () => {
             <input
               id="firstName"
               type="text"
-              name="name.firstName"
-              value={user.name.firstName}
-              onChange={handleOnChange}
+              {...register("name.firstName")}
+              onBlur={handleOnBlur}
             />
+            {errors.name?.firstName && (
+              <p className="text-red-500">{errors.name.firstName.message}</p>
+            )}
           </div>
           <div className="text-input">
             <label htmlFor="LastName">Last Name</label>
             <input
               id="LastName"
               type="text"
-              name="name.lastName"
-              value={user.name.lastName}
-              onChange={handleOnChange}
+              {...register("name.lastName")}
+              onBlur={handleOnBlur}
             />
+            {errors.name?.lastName && (
+              <p className="text-red-500">{errors.name.lastName.message}</p>
+            )}
           </div>
         </fieldset>
 
@@ -105,10 +109,10 @@ const RegisterPage = () => {
             <input
               id="dob"
               type="date"
-              name="dob"
-              value={user.dob}
-              onChange={handleOnChange}
+              {...register("dob")}
+              onBlur={handleOnBlur}
             />
+            {errors.dob && <p className="text-red-500">{errors.dob.message}</p>}
           </div>
           <div className="text-input">
             <p>Gender</p>
@@ -119,11 +123,10 @@ const RegisterPage = () => {
                 </label>
                 <input
                   id="male"
-                  name="gender"
                   type="radio"
                   value="male"
-                  checked={user.gender === "male"}
-                  onChange={handleOnChange}
+                  {...register("gender")}
+                  onBlur={handleOnBlur}
                 />
               </div>
               <div>
@@ -132,11 +135,10 @@ const RegisterPage = () => {
                 </label>
                 <input
                   id="female"
-                  name="gender"
                   type="radio"
                   value="female"
-                  checked={user.gender === "female"}
-                  onChange={handleOnChange}
+                  {...register("gender")}
+                  onBlur={handleOnBlur}
                 />
               </div>
             </fieldset>
@@ -156,15 +158,19 @@ const RegisterPage = () => {
                 {isMetricHeight ? "cm" : "ft'in\""}
               </button>
             </label>
-            <ReactInputMask
+            <InputMask
               id="height"
-              name="height"
               type="text"
-              mask={isMetricHeight ? "999" : "9'99\""}
+              mask={isMetricHeight ? "___" : "_'__\""}
+              replacement={{ _: /\d/ }}
+              showMask={true}
               placeholder={isMetricHeight ? "e.g., 170" : "e.g., 5'11\""}
-              value={user.height}
-              onChange={handleOnChange}
+              {...register("height")}
+              onBlur={handleOnBlur}
             />
+            {errors.height && (
+              <p className="text-red-500">{errors.height.message}</p>
+            )}
           </div>
           <div className="text-input">
             <label htmlFor="weight" className="pb-1">
@@ -179,12 +185,16 @@ const RegisterPage = () => {
             </label>
             <input
               id="weight"
-              name="weight"
               type="number"
               placeholder={isMetricWeight ? "e.g., 36" : "e.g., 155"}
-              value={user.weight}
-              onChange={handleOnChange}
+              {...register("weight", { valueAsNumber: true })}
+              step={"0.01"} // Allow decimals for metric, integers for imperial
+              min="0" // Ensure no negative values
+              onBlur={handleOnBlur}
             />
+            {errors.weight && (
+              <p className="text-red-500">{errors.weight.message}</p>
+            )}
           </div>
         </fieldset>
         <button type="submit" className="bg-blue-500 text-white rounded-sm p-2">

@@ -6,6 +6,6 @@ export interface User {
   dob: string;
   gender: "male" | "female";
   height: string;
-  weight: string;
-  exerciseLevel: string;
+  weight: number;
+  exerciseLevel?: string;
 }
